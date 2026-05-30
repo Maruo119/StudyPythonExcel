@@ -1,5 +1,10 @@
 """
-サンプル設定Excelを生成するスクリプト
+サンプル設定Excelを生成するスクリプト（修正版）
+
+新しい構成：
+- シート1: 「アプリ」（アプリID, アプリ名）
+- シート2: 「フェーズ」（フェーズ名, 区分）
+- シート3: 「工数」（アプリID, ベンダー名, フェーズ名, ベンダー工数, 発注金額, 社員工数）
 """
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -32,90 +37,103 @@ for idx, (app_id, app_name) in enumerate(apps_data, start=2):
     ws_apps[f"A{idx}"] = app_id
     ws_apps[f"B{idx}"] = app_name
 
-# 列幅調整
 ws_apps.column_dimensions["A"].width = 12
 ws_apps.column_dimensions["B"].width = 20
 
 # ============================================
-# シート2: フェーズマスタ
+# シート2: フェーズマスタ（新形式）
 # ============================================
 ws_phases = wb.create_sheet("フェーズ")
-ws_phases["A1"] = "フェーズID"
-ws_phases["B1"] = "フェーズ名"
-ws_phases["C1"] = "区分"
+ws_phases["A1"] = "フェーズ名"
+ws_phases["B1"] = "区分"
 
 phases_data = [
-    ("P001", "要件定義", "資産"),
-    ("P002", "基本設計", "資産"),
-    ("P003", "詳細設計", "資産"),
-    ("P004", "実装", "費用"),
-    ("P005", "単体テスト", "費用"),
-    ("P006", "統合テスト", "費用"),
-    ("P007", "本番環境構築", "費用"),
+    ("P001_要件定義", "資産"),
+    ("P002_基本設計", "資産"),
+    ("P003_詳細設計", "資産"),
+    ("P004_実装", "費用"),
+    ("P005_単体テスト", "費用"),
+    ("P006_統合テスト", "費用"),
+    ("P007_本番環境構築", "費用"),
 ]
 
-for idx, (phase_id, phase_name, division) in enumerate(phases_data, start=2):
-    ws_phases[f"A{idx}"] = phase_id
-    ws_phases[f"B{idx}"] = phase_name
-    ws_phases[f"C{idx}"] = division
+for idx, (phase_name, division) in enumerate(phases_data, start=2):
+    ws_phases[f"A{idx}"] = phase_name
+    ws_phases[f"B{idx}"] = division
 
-ws_phases.column_dimensions["A"].width = 12
-ws_phases.column_dimensions["B"].width = 18
-ws_phases.column_dimensions["C"].width = 10
+ws_phases.column_dimensions["A"].width = 25
+ws_phases.column_dimensions["B"].width = 10
 
 # ============================================
-# シート3: 工数データ
+# シート3: 工数データ（ベンダー・社員統合）
 # ============================================
 ws_work = wb.create_sheet("工数")
 ws_work["A1"] = "アプリID"
-ws_work["B1"] = "フェーズID"
-ws_work["C1"] = "工数（人日）"
+ws_work["B1"] = "ベンダー名"
+ws_work["C1"] = "フェーズ名"
+ws_work["D1"] = "ベンダー工数（人日）"
+ws_work["E1"] = "発注金額"
+ws_work["F1"] = "社員工数（人日）"
 
-# サンプル工数データ（ランダムに配置）
 work_data = [
-    ("APP001", "P001", 5),
-    ("APP001", "P002", 8),
-    ("APP001", "P004", 15),
-    ("APP001", "P005", 10),
-    ("APP002", "P001", 10),
-    ("APP002", "P002", 12),
-    ("APP002", "P003", 20),
-    ("APP002", "P004", 30),
-    ("APP002", "P006", 18),
-    ("APP003", "P002", 6),
-    ("APP003", "P003", 10),
-    ("APP003", "P004", 20),
-    ("APP004", "P001", 3),
-    ("APP004", "P002", 5),
-    ("APP004", "P004", 12),
-    ("APP004", "P005", 8),
-    ("APP005", "P001", 4),
-    ("APP005", "P003", 15),
-    ("APP005", "P004", 25),
-    ("APP006", "P002", 8),
-    ("APP006", "P004", 18),
-    ("APP006", "P005", 10),
-    ("APP007", "P001", 3),
-    ("APP007", "P003", 12),
-    ("APP007", "P004", 16),
-    ("APP008", "P002", 7),
-    ("APP008", "P004", 14),
-    ("APP009", "P003", 11),
-    ("APP009", "P004", 22),
-    ("APP010", "P001", 6),
-    ("APP010", "P002", 9),
-    ("APP010", "P004", 20),
-    ("APP010", "P006", 12),
+    ("APP001", "ベンダーA", "P001_要件定義", 5, 150000, 2),
+    ("APP001", "ベンダーA", "P002_基本設計", 8, 240000, 3),
+    ("APP001", "ベンダーB", "P004_実装", 15, 450000, 1),
+    ("APP001", "ベンダーB", "P005_単体テスト", 10, 300000, 2),
+
+    ("APP002", "ベンダーC", "P001_要件定義", 10, 300000, 4),
+    ("APP002", "ベンダーC", "P002_基本設計", 12, 360000, 5),
+    ("APP002", "ベンダーC", "P003_詳細設計", 20, 600000, 3),
+    ("APP002", "ベンダーC", "P004_実装", 30, 900000, 6),
+    ("APP002", "ベンダーC", "P006_統合テスト", 18, 540000, 4),
+
+    ("APP003", "ベンダーA", "P002_基本設計", 6, 180000, 2),
+    ("APP003", "ベンダーA", "P003_詳細設計", 10, 300000, 3),
+    ("APP003", "ベンダーD", "P004_実装", 20, 600000, 4),
+
+    ("APP004", "ベンダーE", "P001_要件定義", 3, 90000, 1),
+    ("APP004", "ベンダーE", "P002_基本設計", 5, 150000, 2),
+    ("APP004", "ベンダーE", "P004_実装", 12, 360000, 2),
+    ("APP004", "ベンダーE", "P005_単体テスト", 8, 240000, 1),
+
+    ("APP005", "ベンダーA", "P001_要件定義", 4, 120000, 1),
+    ("APP005", "ベンダーF", "P003_詳細設計", 15, 450000, 3),
+    ("APP005", "ベンダーF", "P004_実装", 25, 750000, 5),
+
+    ("APP006", "ベンダーC", "P002_基本設計", 8, 240000, 2),
+    ("APP006", "ベンダーC", "P004_実装", 18, 540000, 3),
+    ("APP006", "ベンダーC", "P005_単体テスト", 10, 300000, 2),
+
+    ("APP007", "ベンダーE", "P001_要件定義", 3, 90000, 1),
+    ("APP007", "ベンダーE", "P003_詳細設計", 12, 360000, 2),
+    ("APP007", "ベンダーD", "P004_実装", 16, 480000, 3),
+
+    ("APP008", "ベンダーA", "P002_基本設計", 7, 210000, 2),
+    ("APP008", "ベンダーB", "P004_実装", 14, 420000, 2),
+
+    ("APP009", "ベンダーD", "P003_詳細設計", 11, 330000, 2),
+    ("APP009", "ベンダーD", "P004_実装", 22, 660000, 4),
+
+    ("APP010", "ベンダーE", "P001_要件定義", 6, 180000, 2),
+    ("APP010", "ベンダーE", "P002_基本設計", 9, 270000, 3),
+    ("APP010", "ベンダーC", "P004_実装", 20, 600000, 4),
+    ("APP010", "ベンダーC", "P006_統合テスト", 12, 360000, 2),
 ]
 
-for idx, (app_id, phase_id, hours) in enumerate(work_data, start=2):
+for idx, (app_id, vendor, phase, vendor_hours, amount, emp_hours) in enumerate(work_data, start=2):
     ws_work[f"A{idx}"] = app_id
-    ws_work[f"B{idx}"] = phase_id
-    ws_work[f"C{idx}"] = hours
+    ws_work[f"B{idx}"] = vendor
+    ws_work[f"C{idx}"] = phase
+    ws_work[f"D{idx}"] = vendor_hours
+    ws_work[f"E{idx}"] = amount
+    ws_work[f"F{idx}"] = emp_hours
 
 ws_work.column_dimensions["A"].width = 12
 ws_work.column_dimensions["B"].width = 12
-ws_work.column_dimensions["C"].width = 15
+ws_work.column_dimensions["C"].width = 25
+ws_work.column_dimensions["D"].width = 18
+ws_work.column_dimensions["E"].width = 12
+ws_work.column_dimensions["F"].width = 18
 
 # ============================================
 # ヘッダー行のスタイル統一
@@ -134,4 +152,4 @@ for ws in [ws_apps, ws_phases, ws_work]:
 # ファイルを保存
 Path("input").mkdir(exist_ok=True)
 wb.save("input\\config.xlsx")
-print("[OK] サンプル設定ファイルを作成しました: input\\config.xlsx")
+print("[OK] Sample configuration file created: input\\config.xlsx")
