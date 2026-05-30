@@ -1,10 +1,11 @@
 """
-サンプル設定Excelを生成するスクリプト（修正版）
+サンプル設定Excelを生成するスクリプト（新仕様版）
 
 新しい構成：
 - シート1: 「アプリ」（アプリID, アプリ名）
 - シート2: 「フェーズ」（フェーズ名, 区分）
-- シート3: 「工数」（アプリID, ベンダー名, フェーズ名, ベンダー工数, 発注金額, 社員工数）
+- シート3: 「社員単価」（単価ラベル, 単価）
+- シート4: 「工数」（アプリID, ベンダー/社員, フェーズ名, 工数, 発注金額, -, 社員コスト, 出力シート指定）
 """
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -65,75 +66,97 @@ ws_phases.column_dimensions["A"].width = 25
 ws_phases.column_dimensions["B"].width = 10
 
 # ============================================
-# シート3: 工数データ（ベンダー・社員統合）
+# シート3: 社員単価マスタ（新規）
+# ============================================
+ws_employee_cost = wb.create_sheet("社員単価")
+ws_employee_cost["A1"] = "単価ラベル"
+ws_employee_cost["B1"] = "単価"
+ws_employee_cost["A2"] = "社員単価"
+ws_employee_cost["B2"] = 100000  # ¥100,000/人日
+
+ws_employee_cost.column_dimensions["A"].width = 15
+ws_employee_cost.column_dimensions["B"].width = 15
+
+# ============================================
+# シート4: 工数データ（新仕様版）
 # ============================================
 ws_work = wb.create_sheet("工数")
 ws_work["A1"] = "アプリID"
-ws_work["B1"] = "ベンダー名"
+ws_work["B1"] = "ベンダー/社員"
 ws_work["C1"] = "フェーズ名"
-ws_work["D1"] = "ベンダー工数（人日）"
+ws_work["D1"] = "工数（人日）"
 ws_work["E1"] = "発注金額"
-ws_work["F1"] = "社員工数（人日）"
+ws_work["F1"] = ""  # F列は未使用（将来拡張用）
+ws_work["G1"] = "社員コスト"
+ws_work["H1"] = "出力シート指定"
 
+# 新形式: (app_id, vendor_employee, phase, hours, vendor_amount, employee_cost, output_sheet)
+# - vendor_employee: ベンダー名 または 「社員」
+# - hours: 工数（人日）
+# - vendor_amount: ベンダーの場合は金額、社員の場合は空（計算値）
+# - employee_cost: 社員の場合は計算値（hours×単価）、ベンダーの場合は空
+# - output_sheet: 出力先シート指定
 work_data = [
-    ("APP001", "ベンダーA", "P001_要件定義", 5, 150000, 2),
-    ("APP001", "ベンダーA", "P002_基本設計", 8, 240000, 3),
-    ("APP001", "ベンダーB", "P004_実装", 15, 450000, 1),
-    ("APP001", "ベンダーB", "P005_単体テスト", 10, 300000, 2),
+    ("APP001", "ベンダーA", "P001_要件定義", 5, 150000, None, "詳細_1"),
+    ("APP001", "ベンダーA", "P002_基本設計", 8, 240000, None, "詳細_1"),
+    ("APP001", "社員", "P001_要件定義", 2, None, 200000, "詳細_1"),
+    ("APP001", "ベンダーB", "P004_実装", 15, 450000, None, "詳細_2"),
+    ("APP001", "社員", "P004_実装", 3, None, 300000, "詳細_2"),
 
-    ("APP002", "ベンダーC", "P001_要件定義", 10, 300000, 4),
-    ("APP002", "ベンダーC", "P002_基本設計", 12, 360000, 5),
-    ("APP002", "ベンダーC", "P003_詳細設計", 20, 600000, 3),
-    ("APP002", "ベンダーC", "P004_実装", 30, 900000, 6),
-    ("APP002", "ベンダーC", "P006_統合テスト", 18, 540000, 4),
+    ("APP002", "ベンダーC", "P001_要件定義", 10, 300000, None, "詳細_3"),
+    ("APP002", "ベンダーC", "P002_基本設計", 12, 360000, None, "詳細_3"),
+    ("APP002", "社員", "P002_基本設計", 5, None, 500000, "詳細_3"),
+    ("APP002", "ベンダーC", "P003_詳細設計", 20, 600000, None, "詳細_3"),
 
-    ("APP003", "ベンダーA", "P002_基本設計", 6, 180000, 2),
-    ("APP003", "ベンダーA", "P003_詳細設計", 10, 300000, 3),
-    ("APP003", "ベンダーD", "P004_実装", 20, 600000, 4),
+    ("APP003", "ベンダーA", "P002_基本設計", 6, 180000, None, "詳細_1"),
+    ("APP003", "社員", "P002_基本設計", 3, None, 300000, "詳細_1"),
+    ("APP003", "ベンダーD", "P004_実装", 20, 600000, None, "詳細_4"),
 
-    ("APP004", "ベンダーE", "P001_要件定義", 3, 90000, 1),
-    ("APP004", "ベンダーE", "P002_基本設計", 5, 150000, 2),
-    ("APP004", "ベンダーE", "P004_実装", 12, 360000, 2),
-    ("APP004", "ベンダーE", "P005_単体テスト", 8, 240000, 1),
+    ("APP004", "ベンダーE", "P001_要件定義", 3, 90000, None, "詳細_5"),
+    ("APP004", "社員", "P001_要件定義", 1, None, 100000, "詳細_5"),
+    ("APP004", "ベンダーE", "P004_実装", 12, 360000, None, "詳細_5"),
 
-    ("APP005", "ベンダーA", "P001_要件定義", 4, 120000, 1),
-    ("APP005", "ベンダーF", "P003_詳細設計", 15, 450000, 3),
-    ("APP005", "ベンダーF", "P004_実装", 25, 750000, 5),
+    ("APP005", "ベンダーA", "P001_要件定義", 4, 120000, None, "詳細_1"),
+    ("APP005", "社員", "P001_要件定義", 2, None, 200000, "詳細_1"),
+    ("APP005", "ベンダーF", "P004_実装", 25, 750000, None, "詳細_6"),
 
-    ("APP006", "ベンダーC", "P002_基本設計", 8, 240000, 2),
-    ("APP006", "ベンダーC", "P004_実装", 18, 540000, 3),
-    ("APP006", "ベンダーC", "P005_単体テスト", 10, 300000, 2),
+    ("APP006", "ベンダーC", "P002_基本設計", 8, 240000, None, "詳細_3"),
+    ("APP006", "社員", "P002_基本設計", 2, None, 200000, "詳細_3"),
 
-    ("APP007", "ベンダーE", "P001_要件定義", 3, 90000, 1),
-    ("APP007", "ベンダーE", "P003_詳細設計", 12, 360000, 2),
-    ("APP007", "ベンダーD", "P004_実装", 16, 480000, 3),
+    ("APP007", "ベンダーE", "P001_要件定義", 3, 90000, None, "詳細_5"),
+    ("APP007", "ベンダーD", "P004_実装", 16, 480000, None, "詳細_4"),
+    ("APP007", "社員", "P004_実装", 2, None, 200000, "詳細_4"),
 
-    ("APP008", "ベンダーA", "P002_基本設計", 7, 210000, 2),
-    ("APP008", "ベンダーB", "P004_実装", 14, 420000, 2),
+    ("APP008", "ベンダーA", "P002_基本設計", 7, 210000, None, "詳細_1"),
+    ("APP008", "ベンダーB", "P004_実装", 14, 420000, None, "詳細_2"),
+    ("APP008", "社員", "P004_実装", 2, None, 200000, "詳細_2"),
 
-    ("APP009", "ベンダーD", "P003_詳細設計", 11, 330000, 2),
-    ("APP009", "ベンダーD", "P004_実装", 22, 660000, 4),
+    ("APP009", "ベンダーD", "P003_詳細設計", 11, 330000, None, "詳細_4"),
+    ("APP009", "社員", "P003_詳細設計", 3, None, 300000, "詳細_4"),
 
-    ("APP010", "ベンダーE", "P001_要件定義", 6, 180000, 2),
-    ("APP010", "ベンダーE", "P002_基本設計", 9, 270000, 3),
-    ("APP010", "ベンダーC", "P004_実装", 20, 600000, 4),
-    ("APP010", "ベンダーC", "P006_統合テスト", 12, 360000, 2),
+    ("APP010", "ベンダーE", "P001_要件定義", 6, 180000, None, "詳細_5"),
+    ("APP010", "社員", "P001_要件定義", 2, None, 200000, "詳細_5"),
+    ("APP010", "ベンダーC", "P004_実装", 20, 600000, None, "詳細_7"),
 ]
 
-for idx, (app_id, vendor, phase, vendor_hours, amount, emp_hours) in enumerate(work_data, start=2):
+for idx, (app_id, vendor_emp, phase, hours, vendor_amount, emp_cost, output_sheet) in enumerate(work_data, start=2):
     ws_work[f"A{idx}"] = app_id
-    ws_work[f"B{idx}"] = vendor
+    ws_work[f"B{idx}"] = vendor_emp
     ws_work[f"C{idx}"] = phase
-    ws_work[f"D{idx}"] = vendor_hours
-    ws_work[f"E{idx}"] = amount
-    ws_work[f"F{idx}"] = emp_hours
+    ws_work[f"D{idx}"] = hours
+    ws_work[f"E{idx}"] = vendor_amount
+    ws_work[f"F{idx}"] = None  # F列は未使用
+    ws_work[f"G{idx}"] = emp_cost
+    ws_work[f"H{idx}"] = output_sheet
 
 ws_work.column_dimensions["A"].width = 12
-ws_work.column_dimensions["B"].width = 12
+ws_work.column_dimensions["B"].width = 15
 ws_work.column_dimensions["C"].width = 25
-ws_work.column_dimensions["D"].width = 18
-ws_work.column_dimensions["E"].width = 12
-ws_work.column_dimensions["F"].width = 18
+ws_work.column_dimensions["D"].width = 15
+ws_work.column_dimensions["E"].width = 15
+ws_work.column_dimensions["F"].width = 5   # 未使用
+ws_work.column_dimensions["G"].width = 15
+ws_work.column_dimensions["H"].width = 20
 
 # ============================================
 # ヘッダー行のスタイル統一
@@ -142,7 +165,7 @@ header_fill = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="s
 header_font = Font(bold=True, size=11)
 header_align = Alignment(horizontal="center", vertical="center")
 
-for ws in [ws_apps, ws_phases, ws_work]:
+for ws in [ws_apps, ws_phases, ws_employee_cost, ws_work]:
     for cell in ws[1]:
         if cell.value:
             cell.fill = header_fill
