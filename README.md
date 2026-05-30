@@ -8,12 +8,17 @@
 D:\StudyPythonExcel/
 ├── excel_automation.py          # メインプログラム（自動生成の処理）
 ├── create_sample_config.py      # サンプル設定Excelを生成するスクリプト
+├── create_template.py           # テンプレートExcelを生成するスクリプト
+├── PROGRAM_FLOW.md              # プログラムの処理フロー詳解
 ├── README.md                    # このファイル
+├── template/
+│   └── houkoku_template.xlsx    # テンプレート（15シート事前用意）【Git管理対象】
 ├── input/
-│   └── config.xlsx              # ユーザーが入力する設定Excel（マスタデータ）
+│   └── config.xlsx              # ユーザーが入力する設定Excel（マスタデータ）【Git管理対象】
 └── output/
     ├── houkoku_shisan.xlsx      # 自動生成：資産に区分されたフェーズのシート
-    └── houkoku_hiyo.xlsx        # 自動生成：費用に区分されたフェーズのシート
+    ├── houkoku_hiyo.xlsx        # 自動生成：費用に区分されたフェーズのシート
+    └── matching_check_*.xlsx    # 自動生成：突き合わせチェック用ファイル
 ```
 
 ---
@@ -22,8 +27,15 @@ D:\StudyPythonExcel/
 
 ```
 ┌──────────────────────────┐
-│   config.xlsx を作成     │
-│ （アプリ、フェーズ、工数）│
+│ テンプレート初期化       │
+│ create_template.py       │
+│ (15シート用意)           │
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│ config.xlsx を作成       │
+│ create_sample_config.py  │
 └──────────┬───────────────┘
            │
            ▼
@@ -38,13 +50,18 @@ D:\StudyPythonExcel/
            ├─► organize_data_by_division()
            │    └─ 工数を資産/費用に分類
            │
-           └─► create_workbook()
-                └─ 報告用Excel生成 ×2
+           ├─► create_workbook()（資産/費用）
+           │    ├─ テンプレートをコピー
+           │    └─ 15シートに対してデータを上書き
+           │
+           └─► create_matching_check_workbook()
+                └─ 報告Excel から突き合わせチェック生成
            │
            ▼
 ┌──────────────────────────┐
-│  houkoku_shisan.xlsx     │
-│  houkoku_hiyo.xlsx       │
+│ houkoku_shisan.xlsx      │
+│ houkoku_hiyo.xlsx        │
+│ matching_check_*.xlsx    │
 │ を出力                   │
 └──────────────────────────┘
 ```
@@ -53,16 +70,24 @@ D:\StudyPythonExcel/
 
 ## 使用方法
 
-### ステップ1: サンプルファイルを生成
+### ステップ1: テンプレートを生成（初回のみ）
+
+```powershell
+python create_template.py
+```
+
+このコマンドで `template/houkoku_template.xlsx` が生成されます（15シート事前用意）。
+
+### ステップ2: サンプル設定ファイルを生成（初回のみ）
 
 ```powershell
 python create_sample_config.py
 ```
 
 このコマンドで `input/config.xlsx` が生成されます。
-（初回のみ必要。以降はこのファイルを編集して使用）
+（以降はこのファイルを編集して使用）
 
-### ステップ2: メインプログラムを実行
+### ステップ3: メインプログラムを実行（通常モード）
 
 ```powershell
 python excel_automation.py
@@ -71,6 +96,21 @@ python excel_automation.py
 このコマンドで自動的に以下が生成されます：
 - `output/houkoku_shisan.xlsx` （資産に区分されたフェーズ）
 - `output/houkoku_hiyo.xlsx` （費用に区分されたフェーズ）
+- `output/matching_check_[タイムスタンプ].xlsx` （突き合わせチェック）
+
+### ステップ4-1: 任意のタイミングで突き合わせチェックを生成（チェックのみモード）
+
+```powershell
+python excel_automation.py --check-only
+```
+
+既存の報告Excel（`output/houkoku_shisan.xlsx`、`houkoku_hiyo.xlsx`）から突き合わせチェックを生成します。
+
+### ステップ4-2: カスタムパスを指定してチェックを生成
+
+```powershell
+python excel_automation.py --check-only --asset-file C:\path\to\asset.xlsx --expense-file C:\path\to\expense.xlsx
+```
 
 ---
 
@@ -107,18 +147,31 @@ python excel_automation.py
 - 費用に区分したいフェーズの「区分」列を「費用」に設定
 - 新しいフェーズを追加する場合、行を追加します。
 
-### シート3：「工数」
-各アプリのベンダーごと、フェーズごとの工数（人日）と発注金額を記入します。
+### シート3：「社員単価」
+社員1人あたりの日当単価を定義します。
 
-| アプリID | ベンダー名 | フェーズ名 | ベンダー工数（人日） | 発注金額 | 社員工数（人日） |
-|---------|-----------|----------|-------------------|--------|---------------|
-| APP001 | ベンダーA | P001_要件定義 | 5 | 150000 | 2 |
-| APP001 | ベンダーA | P002_基本設計 | 8 | 240000 | 3 |
-| APP001 | ベンダーB | P004_実装 | 15 | 450000 | 1 |
-| ... | ... | ... | ... | ... | ... |
+| 単価ラベル | 単価 |
+|----------|------|
+| 社員単価 | 100000 |
 
 **カスタマイズ方法**：
-- アプリID、ベンダー名、フェーズ名の組み合わせで、ベンダー工数・発注金額・社員工数を入力
+- 社員単価を変更する場合、B2セルの値を更新してください
+
+### シート4：「工数」
+各アプリのベンダー/社員ごと、フェーズごとの工数（人日）と発注金額を記入します。
+
+| アプリID | ベンダー/社員 | フェーズ名 | 工数（人日） | 発注金額 | 社員コスト | 出力シート指定 |
+|---------|-------------|----------|-----------|--------|----------|------------|
+| APP001 | ベンダーA | P001_要件定義 | 5 | 150000 | | 詳細_1 |
+| APP001 | 社員 | P001_要件定義 | 2 | | 200000 | 詳細_1 |
+| APP001 | ベンダーA | P002_基本設計 | 8 | 240000 | | 詳細_1 |
+| APP001 | ベンダーB | P004_実装 | 15 | 450000 | | 詳細_2 |
+| ... | ... | ... | ... | ... | ... | ... |
+
+**カスタマイズ方法**：
+- **ベンダーの場合**: ベンダー/社員列に「ベンダー名」、発注金額を入力。社員コストは空
+- **社員の場合**: ベンダー/社員列に「社員」と入力。発注金額は空。社員コストは工数 × 社員単価を入力
+- **出力シート指定**: データを配置するシート名を指定（詳細_1～詳細_15）。未指定の場合は「詳細_1」
 - 工数がない場合は、この行を削除
 - 同じアプリでも複数のベンダーに依頼する場合は、ベンダー名を変えて複数行追加
 
@@ -127,29 +180,32 @@ python excel_automation.py
 ## 出力ファイル（houkoku_shisan.xlsx / houkoku_hiyo.xlsx）
 
 ### 内容
-- **複数シート（詳細_1, 詳細_2, ...）**: アプリ×ベンダーの組み合わせごとにシートが作成
-- **1行目（メモ欄）**: アプリ名、ベンダー名、社員工数の合計
-- **2行目（ヘッダー）**: フェーズ名、ベンダー工数、発注金額、社員工数
-- **3行目以降（データ）**: 実際の工数・金額情報
+- **15シート（詳細_1～詳細_15）**: テンプレートに事前用意。使用するシートだけにデータを上書き
+- **1行目（メモ欄）**: アプリ名_ベンダー/社員
+- **2行目（ヘッダー）**: アプリ名称、フェーズ、ベンダー/社員、工数（人日）、金額
+- **3行目以降（データ）**: 実際の工数・金額情報（**金額と工数はカンマ区切りで表示**）
 
 ### 例：houkoku_shisan.xlsx
 ```
 [詳細_1 シート]
-行 1: ユーザー管理システム | ベンダーA | 社員工数 | 5
-行 2: フェーズ名 | ベンダー工数（人日） | 発注金額 | 社員工数（人日）
-行 3: P001_要件定義 | 5 | 150000 | 2
-行 4: P002_基本設計 | 8 | 240000 | 3
+行 1: [メモ]
+行 2: アプリ名称 | フェーズ | ベンダー/社員 | 工数（人日） | 金額
+行 3: ユーザー管理システム | P001_要件定義 | ベンダーA | 5 | 150,000
+行 4: ユーザー管理システム | P002_基本設計 | ベンダーA | 8 | 240,000
+行 5: ユーザー管理システム | P001_要件定義 | 社員 | 2 | 200,000
 
 [詳細_2 シート]
-行 1: ユーザー管理システム | ベンダーB | 社員工数 | 3
-行 2: フェーズ名 | ベンダー工数（人日） | 発注金額 | 社員工数（人日）
-行 3: P004_実装 | 15 | 450000 | 1
-行 4: P005_単体テスト | 10 | 300000 | 2
+行 1: [メモ]
+行 2: アプリ名称 | フェーズ | ベンダー/社員 | 工数（人日） | 金額
+行 3: ユーザー管理システム | P004_実装 | ベンダーB | 15 | 450,000
 
-[詳細_3 シート]
-行 1: 決済システム | ベンダーC | 社員工数 | 12
-...
+[詳細_3～15 シート]
+（未使用、空のまま保持）
 ```
+
+### 金額・工数の表示形式
+- **工数（D列）**: カンマ区切り（例：5,125）
+- **金額（E列）**: カンマ区切り（例：150,000）
 
 ---
 
@@ -182,8 +238,8 @@ asset_data, expense_data = organize_data_by_division(work_data, phases)
 
 ---
 
-### 3. `create_workbook(apps, data_by_app_vendor, file_name)`
-**役割**: 報告用Excelファイルを生成
+### 3. `create_workbook(apps, data_by_group, file_name)`
+**役割**: テンプレートをコピーして報告用Excelファイルを生成
 
 ```python
 create_workbook(apps, asset_data, "houkoku_shisan.xlsx")
@@ -191,27 +247,37 @@ create_workbook(apps, expense_data, "houkoku_hiyo.xlsx")
 ```
 
 **処理内容**:
-1. Workbookオブジェクトを作成
-2. アプリ×ベンダーごとにシートを追加（シート名は詳細_1, 詳細_2, ...）
-3. 1行目にメモ欄（アプリ名、ベンダー名、社員工数の合計）を記入
-4. 2行目にヘッダー行を記入
+1. テンプレート（`template/houkoku_template.xlsx`）をコピー
+2. コピーしたファイルを開く
+3. データを対応するシート（詳細_1, 詳細_2, ...）に上書き
+4. 1行目にメモ欄（アプリ名_ベンダー/社員）を記入
 5. 3行目以降にフェーズと工数を記入
-6. セルを装飾（背景色、フォント、枠線）
-7. ファイルを保存
+6. ファイルを保存
+   
+**注**: テンプレートには既に以下が設定されている
+- 2行目ヘッダー行（青色背景、白い太字）
+- セルの装飾（背景色、枠線）
+- 数値書式（金額・工数にカンマ区切り）
 
 ---
 
-### 4. `format_workbook(ws)`
-**役割**: ワークシートをフォーマット（色、フォント、枠線など）
+### 4. `generate_matching_check(file_paths, output_dir)`
+**役割**: 複数の報告用Excelから突き合わせチェック用Excelを生成
 
 ```python
-format_workbook(ws)
+# 内部的に create_matching_check_workbook() から呼び出される
+generate_matching_check(
+    [(Path("output/houkoku_shisan.xlsx"), "houkoku_shisan.xlsx"),
+     (Path("output/houkoku_hiyo.xlsx"), "houkoku_hiyo.xlsx")],
+    Path("output")
+)
 ```
 
-**装飾内容**:
-- 1行目（メモ欄）：黄色背景
-- 2行目（ヘッダー行）：青色背景、白い太字
-- データ行：枠線、右揃え（数値）/左揃え（テキスト）
+**処理内容**:
+1. 複数の報告Excelファイルを読み込み
+2. 新しいWorkbookを作成（「突き合わせ」シート）
+3. 各ファイルのデータを統合して転記
+4. タイムスタンプ付きでファイルを保存
 
 ---
 
@@ -231,28 +297,9 @@ create_workbook(apps, asset_data, "報告_資産.xlsx")
 create_workbook(apps, expense_data, "報告_費用.xlsx")
 ```
 
-### 🔧 出力ファイルのレイアウトを変更したい
+### 🔧 テンプレートのスタイルを変更したい
 
-`create_workbook()` 関数内で、1行目～3行目以降の構成を修正：
-
-```python
-# 1行目の内容を変更
-ws["A1"] = app_name
-ws["B1"] = vendor_name
-# 必要な情報を追加
-
-# 2行目のヘッダーを追加/削除
-ws["A2"] = "フェーズ名"
-ws["B2"] = "ベンダー工数（人日）"
-# カラムを追加したい場合は E2, F2... に追加
-
-# 3行目以降のデータ行も対応
-ws[f"E{row}"] = phase_data["新しい項目"]
-```
-
-### 🎨 色やフォントを変更したい
-
-`format_workbook()` 関数内のスタイル定義を修正：
+`create_template.py` 関数内のスタイル定義を修正し、再度テンプレートを生成：
 
 ```python
 # メモ欄の色を変更（現在は黄色 FFF2CC）
@@ -263,6 +310,36 @@ header_fill = PatternFill(start_color="FF6B6B", end_color="FF6B6B", fill_type="s
 
 # フォントサイズを変更（現在は11pt）
 header_font = Font(bold=True, color="FFFFFF", size=14)
+```
+
+修正後、`python create_template.py` を実行してテンプレートを再生成してください。
+
+### 🔧 出力シート数を変更したい
+
+`create_template.py` の `create_template()` 関数内の「15シート作成」の部分を修正：
+
+```python
+# 現在（15シート）
+for sheet_num in range(1, 16):
+
+# 変更例（20シート）
+for sheet_num in range(1, 21):
+```
+
+修正後、`python create_template.py` を実行してテンプレートを再生成してください。
+
+### 🔧 出力ファイルの名前を変更したい
+
+`excel_automation.py` の main() 関数内で、create_workbook() の呼び出しを修正：
+
+```python
+# 現在
+create_workbook(apps, asset_data, "houkoku_shisan.xlsx")
+create_workbook(apps, expense_data, "houkoku_hiyo.xlsx")
+
+# 変更例
+create_workbook(apps, asset_data, "報告_資産.xlsx")
+create_workbook(apps, expense_data, "報告_費用.xlsx")
 ```
 
 ### 📊 複数の区分（資産/費用の他に「保守」など）を対応
@@ -307,11 +384,22 @@ A: `config.xlsx` の「工数」シートに、アプリID、新しいベンダ�
 
 **Q: 社員工数だけを入力したい場合は？**
 
-A: `config.xlsx` の「工数」シートで、ベンダー工数や発注金額を 0 または空白にしてください。
+A: `config.xlsx` の「工数」シートで、ベンダー/社員列に「社員」と入力し、社員コストを指定してください。
 
-**Q: 出力ファイルのシート数を制限したい場合は？**
+**Q: 出力シートを指定したい場合は？**
 
-A: `create_workbook()` 関数内で、sheet_num が 20 に達したらループを抜ける処理を追加してください。
+A: `config.xlsx` の「工数」シートの「出力シート指定」列に、シート名（詳細_1～詳細_15）を入力してください。
+
+**Q: 突き合わせチェックを再度生成したい場合は？**
+
+A: 以下のコマンドを実行してください：
+```powershell
+python excel_automation.py --check-only
+```
+
+**Q: テンプレートの見た目を変更したい場合は？**
+
+A: `create_template.py` のスタイル定義を修正してから、`python create_template.py` を実行してテンプレートを再生成してください。
 
 ---
 
