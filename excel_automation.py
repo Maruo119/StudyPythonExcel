@@ -279,6 +279,8 @@ def generate_matching_check(file_paths: List[Tuple[Path, str]], output_dir: Path
         file_paths: [(ファイルパス, 表示名), ...] のリスト
         output_dir: 出力ディレクトリ（デフォルト: output/）
     """
+    from openpyxl.styles import numbers
+
     if output_dir is None:
         output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
@@ -296,6 +298,9 @@ def generate_matching_check(file_paths: List[Tuple[Path, str]], output_dir: Path
     ws["E2"] = "ベンダー/社員"
     ws["F2"] = "工数（人日）"
     ws["G2"] = "金額"
+
+    # 数値のカンマ区切り書式
+    comma_format = numbers.FORMAT_NUMBER_COMMA_SEPARATED1  # #,##0
 
     current_row = 3
 
@@ -334,6 +339,10 @@ def generate_matching_check(file_paths: List[Tuple[Path, str]], output_dir: Path
                     ws[f"E{current_row}"] = vendor_employee
                     ws[f"F{current_row}"] = hours
                     ws[f"G{current_row}"] = amount
+
+                    # F列（工数）と G列（金額）にカンマ区切り書式を適用
+                    ws[f"F{current_row}"].number_format = comma_format
+                    ws[f"G{current_row}"].number_format = comma_format
 
                     current_row += 1
 
