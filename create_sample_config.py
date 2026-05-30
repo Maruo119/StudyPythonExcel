@@ -86,15 +86,14 @@ ws_work["B1"] = "ベンダー/社員"
 ws_work["C1"] = "フェーズ名"
 ws_work["D1"] = "工数（人日）"
 ws_work["E1"] = "発注金額"
-ws_work["F1"] = ""  # F列は未使用（将来拡張用）
-ws_work["G1"] = "社員コスト"
-ws_work["H1"] = "出力シート指定"
+ws_work["F1"] = "社員コスト"
+ws_work["G1"] = "出力シート指定"
 
 # 新形式: (app_id, vendor_employee, phase, hours, vendor_amount, employee_cost, output_sheet)
 # - vendor_employee: ベンダー名 または 「社員」
 # - hours: 工数（人日）
-# - vendor_amount: ベンダーの場合は金額、社員の場合は空（計算値）
-# - employee_cost: 社員の場合は計算値（hours×単価）、ベンダーの場合は空
+# - vendor_amount: ベンダーの場合は金額、社員の場合は空
+# - employee_cost: 社員の場合はコスト、ベンダーの場合は空
 # - output_sheet: 出力先シート指定
 work_data = [
     ("APP001", "ベンダーA", "P001_要件定義", 5, 150000, None, "詳細_1"),
@@ -145,18 +144,16 @@ for idx, (app_id, vendor_emp, phase, hours, vendor_amount, emp_cost, output_shee
     ws_work[f"C{idx}"] = phase
     ws_work[f"D{idx}"] = hours
     ws_work[f"E{idx}"] = vendor_amount
-    ws_work[f"F{idx}"] = None  # F列は未使用
-    ws_work[f"G{idx}"] = emp_cost
-    ws_work[f"H{idx}"] = output_sheet
+    ws_work[f"F{idx}"] = emp_cost
+    ws_work[f"G{idx}"] = output_sheet
 
 ws_work.column_dimensions["A"].width = 12
 ws_work.column_dimensions["B"].width = 15
 ws_work.column_dimensions["C"].width = 25
 ws_work.column_dimensions["D"].width = 15
 ws_work.column_dimensions["E"].width = 15
-ws_work.column_dimensions["F"].width = 5   # 未使用
-ws_work.column_dimensions["G"].width = 15
-ws_work.column_dimensions["H"].width = 20
+ws_work.column_dimensions["F"].width = 15
+ws_work.column_dimensions["G"].width = 20
 
 # ============================================
 # ヘッダー行のスタイル統一

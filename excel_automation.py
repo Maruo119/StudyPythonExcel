@@ -19,6 +19,8 @@ from openpyxl.utils import get_column_letter
 from pathlib import Path
 from typing import Dict, List, Tuple
 from datetime import datetime
+import shutil
+import argparse
 
 
 def read_config() -> Tuple[Dict, Dict, float, List]:
@@ -65,20 +67,20 @@ def read_config() -> Tuple[Dict, Dict, float, List]:
         if cost_value is not None:
             employee_cost_per_day = float(cost_value)
 
-    # 工数データを読み込み（新形式: 8列対応）
+    # 工数データを読み込み（新形式: 7列対応）
     work_data = []
     ws_work = wb["工数"]
     for row in ws_work.iter_rows(min_row=2, values_only=True):
         if row[0] is None:
             break
-        # A:アプリID, B:ベンダー/社員, C:フェーズ名, D:工数, E:発注金額, F:空, G:社員コスト, H:出力シート指定
+        # A:アプリID, B:ベンダー/社員, C:フェーズ名, D:工数, E:発注金額, F:社員コスト, G:出力シート指定
         app_id = row[0]
         vendor_employee = row[1]  # ベンダー名 または 「社員」
         phase_name = row[2]
         hours = row[3]
         vendor_amount = row[4]  # ベンダーの場合は金額、社員の場合はNone
-        employee_cost = row[6]  # 社員の場合はコスト、ベンダーの場合はNone
-        output_sheet = row[7]  # 出力シート指定
+        employee_cost = row[5]  # 社員の場合はコスト、ベンダーの場合はNone
+        output_sheet = row[6]  # 出力シート指定
 
         work_data.append((app_id, vendor_employee, phase_name, hours, vendor_amount, employee_cost, output_sheet))
 
@@ -141,21 +143,32 @@ def organize_data_by_division(work_data: List, phases: Dict, employee_cost_per_d
 
 def create_workbook(apps: Dict, data_by_group: Dict, file_name: str):
     """
-    報告用Excelを生成する。
+    テンプレートをコピーして報告用Excelを生成する。
+    テンプレートには15シートが用意されているため、シート作成は不要。
 
     Args:
         apps: {アプリID: アプリ名}
         data_by_group: {(アプリID, vendor_employee, output_sheet): {フェーズ名: {hours, amount}}}
         file_name: 出力ファイル名（例: "houkoku_shisan.xlsx"）
     """
+    from openpyxl.styles import numbers
+
+    template_path = Path("template") / "houkoku_template.xlsx"
+    if not template_path.exists():
+        raise FileNotFoundError(f"テンプレートが見つかりません: {template_path}")
+
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / file_name
 
-    wb = Workbook()
-    wb.remove(wb.active)
+    # テンプレートをコピー
+    shutil.copy(template_path, output_path)
 
-    # 出力シート指定ごとにシートを作成
-    sheet_dict = {}  # {sheet_name: 作成済みシートのリスト}
+    # コピーしたファイルを開く
+    wb = load_workbook(output_path)
+
+    # 各シートにデータを書き込む
+    sheet_row_dict = {}  # {sheet_name: 次に書き込む行番号}
 
     for (app_id, vendor_employee, output_sheet_name) in sorted(data_by_group.keys()):
         if not data_by_group[(app_id, vendor_employee, output_sheet_name)]:
@@ -168,29 +181,23 @@ def create_workbook(apps: Dict, data_by_group: Dict, file_name: str):
         if output_sheet_name and str(output_sheet_name).strip():
             sheet_title = str(output_sheet_name)
         else:
-            sheet_title = f"詳細_{len(sheet_dict) + 1}"
+            sheet_title = "詳細_1"
 
-        # 既存シートかどうかを確認
-        if sheet_title not in sheet_dict:
-            ws = wb.create_sheet(title=sheet_title)
-            sheet_dict[sheet_title] = ws
-            # 初回：ヘッダー行を作成
-            ws["A2"] = "アプリ名称"
-            ws["B2"] = "フェーズ"
-            ws["C2"] = "ベンダー/社員"
-            ws["D2"] = "工数（人日）"
-            ws["E2"] = "金額"
-            current_row = 3
-        else:
-            ws = sheet_dict[sheet_title]
-            current_row = ws.max_row + 1
+        # シートが存在するか確認
+        if sheet_title not in wb.sheetnames:
+            print(f"[WARN] シート '{sheet_title}' がテンプレートに見つかりません")
+            continue
 
-        # 1行目（メモ欄）をシートの最初に追加（シートごとに1回だけ）
-        if not hasattr(ws, '_first_data_written'):
+        ws = wb[sheet_title]
+
+        # 初回：シートの1行目（メモ欄）を設定
+        if sheet_title not in sheet_row_dict:
             ws["A1"] = f"{app_name}_{vendor_employee}"
-            ws._first_data_written = True
+            sheet_row_dict[sheet_title] = 3
 
-        # 3行目以降：データ行
+        current_row = sheet_row_dict[sheet_title]
+
+        # 3行目以降：データ行を書き込み
         for phase_name, phase_data in sorted(phases_data.items()):
             ws[f"A{current_row}"] = app_name
             ws[f"B{current_row}"] = phase_name
@@ -199,13 +206,9 @@ def create_workbook(apps: Dict, data_by_group: Dict, file_name: str):
             ws[f"E{current_row}"] = phase_data["amount"]
             current_row += 1
 
-    # 全シートのセルの装飾
-    for sheet_title in sheet_dict:
-        ws = sheet_dict[sheet_title]
-        format_workbook(ws)
+        sheet_row_dict[sheet_title] = current_row
 
     # ファイルを保存
-    output_path = Path("output") / file_name
     wb.save(output_path)
     print(f"[OK] Created: {output_path}")
 
@@ -268,16 +271,17 @@ def format_workbook(ws):
     ws.column_dimensions["E"].width = 15
 
 
-def create_matching_check_workbook():
+def generate_matching_check(file_paths: List[Tuple[Path, str]], output_dir: Path = None):
     """
-    報告用Excelファイル（資産・費用の2ファイル）から
-    突き合わせチェック用Excelを新規生成する。
-    """
-    output_dir = Path("output")
+    複数の報告用Excelファイルから突き合わせチェック用Excelを生成する。
 
-    # 報告用Excelファイルのパスを指定
-    asset_file = output_dir / "houkoku_shisan.xlsx"
-    expense_file = output_dir / "houkoku_hiyo.xlsx"
+    Args:
+        file_paths: [(ファイルパス, 表示名), ...] のリスト
+        output_dir: 出力ディレクトリ（デフォルト: output/）
+    """
+    if output_dir is None:
+        output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
 
     # 新しいワークブックを作成
     wb = Workbook()
@@ -295,9 +299,9 @@ def create_matching_check_workbook():
 
     current_row = 3
 
-    # 両ファイルからデータを読み込んで転記
-    for file_path, file_display_name in [(asset_file, "houkoku_shisan.xlsx"),
-                                          (expense_file, "houkoku_hiyo.xlsx")]:
+    # 指定されたファイルからデータを読み込んで転記
+    for file_path, file_display_name in file_paths:
+        file_path = Path(file_path)
         if not file_path.exists():
             print(f"[WARN] ファイルが見つかりません: {file_path}")
             continue
@@ -383,39 +387,103 @@ def create_matching_check_workbook():
     print(f"[OK] Created: {output_file}")
 
 
+def create_matching_check_workbook():
+    """
+    報告用Excelファイル（資産・費用の2ファイル）から
+    突き合わせチェック用Excelを新規生成する。
+    """
+    output_dir = Path("output")
+
+    # 報告用Excelファイルのパスを指定
+    file_paths = [
+        (output_dir / "houkoku_shisan.xlsx", "houkoku_shisan.xlsx"),
+        (output_dir / "houkoku_hiyo.xlsx", "houkoku_hiyo.xlsx"),
+    ]
+
+    generate_matching_check(file_paths, output_dir)
+
+
 def main():
     """メイン処理"""
+    parser = argparse.ArgumentParser(description="Excel工数管理自動化スクリプト")
+    parser.add_argument(
+        "--check-only",
+        action="store_true",
+        help="突き合わせチェックのみを実行（報告Excelは作成しない）"
+    )
+    parser.add_argument(
+        "--asset-file",
+        type=str,
+        default=None,
+        help="資産報告Excelのパス（--check-only使用時）"
+    )
+    parser.add_argument(
+        "--expense-file",
+        type=str,
+        default=None,
+        help="費用報告Excelのパス（--check-only使用時）"
+    )
+
+    args = parser.parse_args()
+
     try:
-        print("=" * 50)
-        print("Excel工数管理自動化を開始します")
-        print("=" * 50)
+        if args.check_only:
+            # チェックのみモード
+            print("=" * 50)
+            print("突き合わせチェック用Excelを生成します")
+            print("=" * 50)
 
-        # 1. 設定Excelを読み込み
-        print("\n[Step 1] Reading configuration file...")
-        apps, phases, employee_cost_per_day, work_data = read_config()
-        print(f"  [OK] Number of apps: {len(apps)}")
-        print(f"  [OK] Number of phases: {len(phases)}")
-        print(f"  [OK] Employee cost per day: {employee_cost_per_day:,.0f} JPY")
-        print(f"  [OK] Number of work records: {len(work_data)}")
+            output_dir = Path("output")
+            asset_file = args.asset_file or str(output_dir / "houkoku_shisan.xlsx")
+            expense_file = args.expense_file or str(output_dir / "houkoku_hiyo.xlsx")
 
-        # 2. 工数データを資産/費用に分類
-        print("\n[Step 2] Classifying work data...")
-        asset_data, expense_data = organize_data_by_division(work_data, phases, employee_cost_per_day)
-        print(f"  [OK] Asset groups: {len(asset_data)}")
-        print(f"  [OK] Expense groups: {len(expense_data)}")
+            file_paths = [
+                (Path(asset_file), Path(asset_file).name),
+                (Path(expense_file), Path(expense_file).name),
+            ]
 
-        # 3. 報告用Excelを生成
-        print("\n[Step 3] Generating report files...")
-        create_workbook(apps, asset_data, "houkoku_shisan.xlsx")
-        create_workbook(apps, expense_data, "houkoku_hiyo.xlsx")
+            print(f"\n[Step 1] Reading report files...")
+            print(f"  Asset file: {asset_file}")
+            print(f"  Expense file: {expense_file}")
 
-        # 4. 突き合わせチェック用Excelを生成
-        print("\n[Step 4] Generating matching check file...")
-        create_matching_check_workbook()
+            generate_matching_check(file_paths, output_dir)
 
-        print("\n" + "=" * 50)
-        print("[OK] Process completed successfully!")
-        print("=" * 50)
+            print("\n" + "=" * 50)
+            print("[OK] Matching check file generated successfully!")
+            print("=" * 50)
+
+        else:
+            # 通常モード
+            print("=" * 50)
+            print("Excel工数管理自動化を開始します")
+            print("=" * 50)
+
+            # 1. 設定Excelを読み込み
+            print("\n[Step 1] Reading configuration file...")
+            apps, phases, employee_cost_per_day, work_data = read_config()
+            print(f"  [OK] Number of apps: {len(apps)}")
+            print(f"  [OK] Number of phases: {len(phases)}")
+            print(f"  [OK] Employee cost per day: {employee_cost_per_day:,.0f} JPY")
+            print(f"  [OK] Number of work records: {len(work_data)}")
+
+            # 2. 工数データを資産/費用に分類
+            print("\n[Step 2] Classifying work data...")
+            asset_data, expense_data = organize_data_by_division(work_data, phases, employee_cost_per_day)
+            print(f"  [OK] Asset groups: {len(asset_data)}")
+            print(f"  [OK] Expense groups: {len(expense_data)}")
+
+            # 3. 報告用Excelを生成
+            print("\n[Step 3] Generating report files...")
+            create_workbook(apps, asset_data, "houkoku_shisan.xlsx")
+            create_workbook(apps, expense_data, "houkoku_hiyo.xlsx")
+
+            # 4. 突き合わせチェック用Excelを生成
+            print("\n[Step 4] Generating matching check file...")
+            create_matching_check_workbook()
+
+            print("\n" + "=" * 50)
+            print("[OK] Process completed successfully!")
+            print("=" * 50)
 
     except FileNotFoundError as e:
         print(f"[ERROR] {e}")

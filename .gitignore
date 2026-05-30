@@ -1,6 +1,14 @@
-# 自動生成ファイル
-output/
+# 自動生成ファイル（output フォルダを除外）
+/output/
+
+# Excel ファイル（生成ファイルのみ除外）
 *.xlsx
+
+# template と input フォルダ内のExcelファイルは追跡対象
+!/template/
+!/template/**
+!/input/
+!/input/**
 
 # Python
 __pycache__/
